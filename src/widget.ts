@@ -14,8 +14,8 @@ const CYAN = "\x1b[36m";
 function statusMarker(status: Todo["status"]): string {
   switch (status) {
     case "in_progress": return `${BOLD}${CYAN}${">"}${RESET}`;
-    case "completed":   return `${GREEN}${"v"}${RESET}`;
-    default:            return " ";
+    case "completed":   return `${GREEN}[v]${RESET}`;
+    default:            return "[ ]";
   }
 }
 
