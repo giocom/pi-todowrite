@@ -54,12 +54,12 @@ export function createTodoToolDefinition(
     promptSnippet:
       "Maintain a structured todo list before starting multi-step work and update it as items complete.",
     promptGuidelines: [
-      "Create a todo list BEFORE starting implementation when the task involves 2+ files to modify, 3+ steps, or any delegated/cross-cutting work.",
-      "Skip todos for: single-file typo fixes, simple lookups, pure questions/explanations.",
-      "One item in_progress at a time. Start the next only after completing the current.",
-      "Mark items completed immediately after each finishes.",
-      'Format each item content as: "[WHERE] [HOW] to [WHY] - expect [RESULT]".',
+      "You MUST create a todo list before starting any task involving 2+ files, 3+ steps, or delegated work.",
+      "Work in a CHECK → EXECUTE → UPDATE loop: check the todo, work the current item, update status immediately.",
+      "Only ONE item may be in_progress at a time. Do not skip ahead.",
+      'Format content as: "[WHERE] [HOW] to [WHY] - expect [RESULT]".',
       "Each item should be completable in 1-3 tool calls. If it needs more, split it.",
+      "Call todowrite after EACH item to update statuses — not just at the start.",
     ],
     parameters: todoListSchema,
     execute: async (_toolCallId, params, _signal, _onUpdate, _ctx) => {
