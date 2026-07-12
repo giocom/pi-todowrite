@@ -1,5 +1,5 @@
 import { Type, type Static } from "typebox";
-import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
+import type { ExtensionContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { TodoStore, Todo } from "./store.js";
 
 // ─── Schema ───────────────────────────────────────────────────────────
@@ -40,7 +40,7 @@ export type TodoListInput = Static<typeof todoListSchema>;
 export function createTodoToolDefinition(
   store: TodoStore,
   appendEntry: (customType: string, data?: unknown) => void,
-  onUpdated?: () => void,
+  onUpdated?: (ctx: ExtensionContext) => void,
 ): ToolDefinition {
   return {
     name: "todowrite",
@@ -66,7 +66,7 @@ export function createTodoToolDefinition(
       const todos = (params as { todos: Todo[] }).todos;
       store.replaceAll(todos);
       appendEntry("pi-todowrite/todos", todos);
-      onUpdated?.();
+      onUpdated?.(_ctx);
 
       const remaining = store.getIncomplete().length;
       const completed = todos.filter((t) => t.status === "completed").length;

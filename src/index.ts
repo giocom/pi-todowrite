@@ -114,9 +114,13 @@ export default function piTodowrite(pi: ExtensionAPI): void {
     if (widgetVisible) renderTodoWidget(ctx, store);
   };
 
-  const todoTool = createTodoToolDefinition(store, (customType, data) => {
-    pi.appendEntry(customType, data);
-  });
+  const todoTool = createTodoToolDefinition(
+    store,
+    (customType, data) => {
+      pi.appendEntry(customType, data);
+    },
+    onTodoUpdated,
+  );
 
   pi.registerTool(todoTool);
 
@@ -160,6 +164,14 @@ export default function piTodowrite(pi: ExtensionAPI): void {
 
   pi.on("agent_end", async (_event, ctx) => {
     if (widgetVisible) renderTodoWidget(ctx, store);
+  });
+
+  // ── Immediate widget refresh after tool execution ────────────────
+
+  pi.on("tool_result", async (event, ctx) => {
+    if (event.toolName === "todowrite" && widgetVisible) {
+      renderTodoWidget(ctx, store);
+    }
   });
 
   // ── Session shutdown ──────────────────────────────────────────────
