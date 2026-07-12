@@ -15,7 +15,7 @@ structured todos before multi-step work and displays them in the TUI.
 ## Install
 
 ```bash
-pi install git:github.com/capyup/pi-todowrite
+pi install git:github.com/giocom/pi-todowrite
 ```
 
 Or run directly for testing:
