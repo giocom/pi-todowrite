@@ -1,0 +1,217 @@
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { TodoStore, type Todo } from "./store.js";
+import { createTodoToolDefinition } from "./todo-tool.js";
+import { renderTodoWidget, clearTodoWidget } from "./widget.js";
+
+const TODO_CUSTOM_TYPE = "pi-todowrite/todos";
+
+function isCustomEntry(e: unknown): e is { customType: string; data?: unknown } {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    "customType" in e &&
+    typeof (e as Record<string, unknown>).customType === "string"
+  );
+}
+
+function extractTodos(data: unknown): Todo[] | null {
+  if (!Array.isArray(data)) return null;
+  const valid: Todo[] = [];
+  for (const item of data) {
+    if (
+      typeof item === "object" &&
+      item !== null &&
+      "content" in item &&
+      "status" in item &&
+      "priority" in item
+    ) {
+      const r = item as Record<string, unknown>;
+      if (
+        typeof r.content === "string" &&
+        (r.status === "pending" || r.status === "in_progress" || r.status === "completed") &&
+        (r.priority === "high" || r.priority === "medium" || r.priority === "low")
+      ) {
+        valid.push({
+          content: r.content,
+          status: r.status,
+          priority: r.priority,
+        });
+      }
+    }
+  }
+  return valid.length > 0 ? valid : null;
+}
+
+function buildTodoPromptBlock(store: TodoStore): string {
+  const rules = [
+    "<todo-management>",
+    "Create a todo list BEFORE starting implementation when the task involves:",
+    "- 2+ distinct files to modify, OR",
+    "- 3+ steps, OR",
+    "- Any delegated/cross-cutting work",
+    "",
+    "Skip todos for: single-file typo fixes, simple lookups, pure questions/explanations.",
+    "",
+    "Rules:",
+    "- One item in_progress at a time. Start the next only after completing the current.",
+    "- Mark items completed immediately after each finishes.",
+    '- Format each item content as: "[WHERE] [HOW] to [WHY] - expect [RESULT]"',
+    "- Each item should be completable in 1-3 tool calls.",
+    "",
+    "Use the todowrite tool to create and update the list.",
+    "</todo-management>",
+  ];
+
+  const lines = [...rules];
+
+  if (store.hasTodos()) {
+    lines.push("", "<current-todos>");
+    const todos = store.getAll();
+    for (const t of todos) {
+      const mark =
+        t.status === "in_progress" ? "in_progress" :
+        t.status === "completed"   ? "completed"   :
+                                      "pending";
+      lines.push(`- [${mark}] ${t.content} (${t.priority})`);
+    }
+    const next = store.getFirstIncomplete();
+    if (next) {
+      lines.push("", `Continue with the next incomplete task: "${next.content}"`);
+    } else {
+      lines.push("", "All tasks are completed.");
+    }
+    lines.push("</current-todos>");
+  }
+
+  return "\n\n" + lines.join("\n");
+}
+
+function formatTodoListForNotify(store: TodoStore): string {
+  const todos = store.getAll();
+  if (todos.length === 0) return "No todos in the current session.";
+  const lines = ["Todo List:"];
+  for (const t of todos) {
+    const mark =
+      t.status === "in_progress" ? ">" :
+      t.status === "completed"   ? "v" :
+                                    " ";
+    const pri =
+      t.priority === "high"   ? "!" :
+      t.priority === "medium" ? "-" :
+                                  " ";
+    lines.push(`  ${mark} [${pri}] ${t.content}`);
+  }
+  return lines.join("\n");
+}
+
+export default function piTodowrite(pi: ExtensionAPI): void {
+  const store = new TodoStore();
+  let widgetVisible = true;
+
+  // ── Tool registration ────────────────────────────────────────────
+
+  const onTodoUpdated = (ctx: ExtensionContext) => {
+    if (widgetVisible) renderTodoWidget(ctx, store);
+  };
+
+  const todoTool = createTodoToolDefinition(store, (customType, data) => {
+    pi.appendEntry(customType, data);
+  });
+
+  pi.registerTool(todoTool);
+
+  // ── System prompt injection ──────────────────────────────────────
+
+  pi.on("before_agent_start", (event) => {
+    const todoBlock = buildTodoPromptBlock(store);
+    return {
+      systemPrompt: event.systemPrompt + todoBlock,
+    };
+  });
+
+  // ── Session restore ──────────────────────────────────────────────
+
+  pi.on("session_start", async (event, ctx) => {
+    store.reset();
+
+    if (event.reason === "startup" || event.reason === "resume" || event.reason === "fork") {
+      try {
+        const entries = ctx.sessionManager.getEntries() as unknown[];
+        const reversed = [...entries].reverse();
+        for (const entry of reversed) {
+          if (!isCustomEntry(entry)) continue;
+          if (entry.customType !== TODO_CUSTOM_TYPE) continue;
+          const todos = extractTodos(entry.data);
+          if (todos) {
+            store.replaceAll(todos);
+            store.clearDirty();
+            break;
+          }
+        }
+      } catch {
+        // Entries not available or parse error — start with empty store
+      }
+    }
+
+    if (widgetVisible) renderTodoWidget(ctx, store);
+  });
+
+  // ── Widget refresh after agent turns ─────────────────────────────
+
+  pi.on("agent_end", async (_event, ctx) => {
+    if (widgetVisible) renderTodoWidget(ctx, store);
+  });
+
+  // ── Session shutdown ──────────────────────────────────────────────
+
+  pi.on("session_shutdown", async (_event, ctx) => {
+    store.reset();
+    clearTodoWidget(ctx);
+  });
+
+  // ── /todowrite command ───────────────────────────────────────────
+
+  pi.registerCommand("todowrite", {
+    description: "Manage or inspect the todo list",
+    getArgumentCompletions: (prefix: string) => {
+      const cmds = ["status", "show", "toggle", "reset"];
+      return cmds
+        .filter((c) => c.startsWith(prefix))
+        .map((value) => ({ value, label: value }));
+    },
+    handler: async (args, ctx) => {
+      const trimmed = args.trim();
+
+      if (trimmed === "" || trimmed === "status" || trimmed === "show") {
+        if (!store.hasTodos()) {
+          ctx.ui.notify("No todos in the current session.", "info");
+          return;
+        }
+        ctx.ui.notify(formatTodoListForNotify(store), "info");
+        return;
+      }
+
+      if (trimmed === "toggle") {
+        widgetVisible = !widgetVisible;
+        if (widgetVisible) {
+          renderTodoWidget(ctx, store);
+          ctx.ui.notify("Todo widget visible.", "info");
+        } else {
+          clearTodoWidget(ctx);
+          ctx.ui.notify("Todo widget hidden.", "info");
+        }
+        return;
+      }
+
+      if (trimmed === "reset") {
+        store.reset();
+        pi.appendEntry(TODO_CUSTOM_TYPE, []);
+        clearTodoWidget(ctx);
+        ctx.ui.notify("Todo list cleared.", "info");
+        return;
+      }
+
+      ctx.ui.notify("Usage: /todowrite [status|show|toggle|reset]", "warning");
+    },
+  });
+}
