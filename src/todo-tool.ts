@@ -26,9 +26,11 @@ const todoItemSchema = Type.Object({
   ),
 });
 
-const todoListSchema = Type.Array(todoItemSchema, {
-  description:
-    "The full todo list. Each call replaces the entire list (full-replacement model).",
+const todoListSchema = Type.Object({
+  todos: Type.Array(todoItemSchema, {
+    description:
+      "The full todo list. Each call replaces the entire list (full-replacement model).",
+  }),
 });
 
 export type TodoListInput = Static<typeof todoListSchema>;
@@ -45,6 +47,7 @@ export function createTodoToolDefinition(
     label: "Manage task list",
     description:
       "Create or replace the structured todo list for multi-step work. " +
+      "Pass an object with a 'todos' array property. " +
       "Call this BEFORE starting implementation when the task involves 2+ files, " +
       "3+ steps, or delegated/cross-cutting work. Call it again after each item " +
       "completes to update statuses. Each call replaces the entire list.",
@@ -60,7 +63,7 @@ export function createTodoToolDefinition(
     ],
     parameters: todoListSchema,
     execute: async (_toolCallId, params, _signal, _onUpdate, _ctx) => {
-      const todos = params as Todo[];
+      const todos = (params as { todos: Todo[] }).todos;
       store.replaceAll(todos);
       appendEntry("pi-todowrite/todos", todos);
       onUpdated?.();
