@@ -35,6 +35,53 @@ const todoListSchema = Type.Object({
 
 export type TodoListInput = Static<typeof todoListSchema>;
 
+type AnyStatus = string;
+type AnyPriority = string;
+
+const STATUS_MAP: Record<string, Todo["status"]> = {
+  pending: "pending",
+  in_progress: "in_progress",
+  inprogress: "in_progress",
+  "in-progress": "in_progress",
+  active: "in_progress",
+  doing: "in_progress",
+  todo: "pending",
+  notstarted: "pending",
+  "not-started": "pending",
+  new: "pending",
+  completed: "completed",
+  complete: "completed",
+  done: "completed",
+  finished: "completed",
+};
+
+const PRIORITY_MAP: Record<string, Todo["priority"]> = {
+  high: "high",
+  medium: "medium",
+  low: "low",
+  normal: "medium",
+  critical: "high",
+  urgent: "high",
+};
+
+function normalizeStatus(raw: AnyStatus): Todo["status"] | undefined {
+  const lower = raw.toLowerCase().trim();
+  return STATUS_MAP[lower];
+}
+
+function normalizePriority(raw: AnyPriority): Todo["priority"] | undefined {
+  const lower = raw.toLowerCase().trim();
+  return PRIORITY_MAP[lower];
+}
+
+function normalizeTodo(item: { content?: unknown; status?: unknown; priority?: unknown }): Todo | null {
+  if (typeof item.content !== "string") return null;
+  const status = typeof item.status === "string" ? normalizeStatus(item.status) : undefined;
+  const priority = typeof item.priority === "string" ? normalizePriority(item.priority) : undefined;
+  if (!status || !priority) return null;
+  return { content: item.content, status, priority };
+}
+
 // ─── Tool factory ─────────────────────────────────────────────────────
 
 export function createTodoToolDefinition(
@@ -63,7 +110,12 @@ export function createTodoToolDefinition(
     ],
     parameters: todoListSchema,
     execute: async (_toolCallId, params, _signal, _onUpdate, _ctx) => {
-      const todos = (params as { todos: Todo[] }).todos;
+      const rawTodos = (params as { todos: unknown[] }).todos;
+      const todos: Todo[] = [];
+      for (const item of rawTodos) {
+        const normalized = normalizeTodo(item as Record<string, unknown>);
+        if (normalized) todos.push(normalized);
+      }
       store.replaceAll(todos);
       appendEntry("pi-todowrite/todos", todos);
       onUpdated?.(_ctx);
