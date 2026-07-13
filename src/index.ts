@@ -67,7 +67,7 @@ function buildTodoPromptBlock(store: TodoStore): string {
     "- Do NOT skip ahead to the next item until the current one is completed.",
     "- If <current-todos> exists, it is the AUTHORITATIVE task list. Follow it exactly.",
     "- Each item must be completable in 1-3 tool calls. If it needs more, split it.",
-    '- Format content as: "[WHERE] [HOW] to [WHY] - expect [RESULT]"',
+    "- Follow the existing format convention from <current-todos> if present.",
     "- After every tool call, check whether the current todo item is done.",
     "</todo-management>",
   ];
