@@ -118,6 +118,8 @@ export default function piTodowrite(pi: ExtensionAPI): void {
   const store = new TodoStore();
   let widgetVisible = true;
   let compactMode = true;
+  let autoResumeEnabled = true;
+  let resumeDebounce = false;
 
   const renderWidget = (ctx: ExtensionContext) => {
     if (compactMode) {
@@ -179,18 +181,35 @@ export default function piTodowrite(pi: ExtensionAPI): void {
     if (widgetVisible) renderWidget(ctx);
   });
 
-  // ── Widget refresh after agent turns ─────────────────────────────
-
-  pi.on("agent_end", async (_event, ctx) => {
-    if (widgetVisible) renderWidget(ctx);
-  });
-
   // ── Immediate widget refresh after tool execution ────────────────
 
   pi.on("tool_result", async (event, ctx) => {
     if (event.toolName === "todowrite" && widgetVisible) {
       renderWidget(ctx);
     }
+  });
+
+  // ── Auto-resume after compaction ─────────────────────────────────
+
+  pi.on("session_compact", async (event, ctx) => {
+    if (!autoResumeEnabled) return;
+    if (event.reason === "manual") return;
+    if (event.willRetry) return;
+    if (!store.hasTodos() || store.getIncomplete().length === 0) return;
+    if (resumeDebounce) return;
+    resumeDebounce = true;
+
+    const piSendUserMessage = pi.sendUserMessage.bind(pi);
+    setTimeout(() => {
+      if (ctx.isIdle()) {
+        piSendUserMessage("Continue with the current task.");
+      }
+    }, 0);
+  });
+
+  pi.on("agent_end", async (_event, ctx) => {
+    resumeDebounce = false;
+    if (widgetVisible) renderWidget(ctx);
   });
 
   // ── Session shutdown ──────────────────────────────────────────────
@@ -205,7 +224,7 @@ export default function piTodowrite(pi: ExtensionAPI): void {
   pi.registerCommand("todowrite", {
     description: "Manage or inspect the todo list",
     getArgumentCompletions: (prefix: string) => {
-      const cmds = ["status", "show", "toggle", "compact", "full", "reset"];
+      const cmds = ["status", "show", "toggle", "compact", "full", "reset", "autoresume"];
       return cmds
         .filter((c) => c.startsWith(prefix))
         .map((value) => ({ value, label: value }));
@@ -256,7 +275,20 @@ export default function piTodowrite(pi: ExtensionAPI): void {
         return;
       }
 
-      ctx.ui.notify("Usage: /todowrite [status|show|toggle|reset]", "warning");
+      if (trimmed === "autoresume" || trimmed === "autoresume on" || trimmed === "autoresume off") {
+        if (trimmed.endsWith("off")) {
+          autoResumeEnabled = false;
+          ctx.ui.notify("Auto-resume after compaction: OFF.", "info");
+        } else if (trimmed.endsWith("on")) {
+          autoResumeEnabled = true;
+          ctx.ui.notify("Auto-resume after compaction: ON.", "info");
+        } else {
+          ctx.ui.notify(`Auto-resume: ${autoResumeEnabled ? "ON" : "OFF"}. Use /todowrite autoresume on|off.`, "info");
+        }
+        return;
+      }
+
+      ctx.ui.notify("Usage: /todowrite [status|show|compact|full|toggle|reset|autoresume]", "warning");
     },
   });
 }
