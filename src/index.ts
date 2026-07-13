@@ -1,7 +1,7 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { TodoStore, type Todo } from "./store.js";
 import { createTodoToolDefinition } from "./todo-tool.js";
-import { renderTodoWidget, clearTodoWidget } from "./widget.js";
+import { renderTodoWidget, renderFullTodoWidget, clearTodoWidget } from "./widget.js";
 
 const TODO_CUSTOM_TYPE = "pi-todowrite/todos";
 
@@ -117,11 +117,20 @@ function formatTodoListForNotify(store: TodoStore): string {
 export default function piTodowrite(pi: ExtensionAPI): void {
   const store = new TodoStore();
   let widgetVisible = true;
+  let compactMode = true;
+
+  const renderWidget = (ctx: ExtensionContext) => {
+    if (compactMode) {
+      renderTodoWidget(ctx, store);
+    } else {
+      renderFullTodoWidget(ctx, store);
+    }
+  };
 
   // ── Tool registration ────────────────────────────────────────────
 
   const onTodoUpdated = (ctx: ExtensionContext) => {
-    if (widgetVisible) renderTodoWidget(ctx, store);
+    if (widgetVisible) renderWidget(ctx);
   };
 
   const todoTool = createTodoToolDefinition(
@@ -167,20 +176,20 @@ export default function piTodowrite(pi: ExtensionAPI): void {
       }
     }
 
-    if (widgetVisible) renderTodoWidget(ctx, store);
+    if (widgetVisible) renderWidget(ctx);
   });
 
   // ── Widget refresh after agent turns ─────────────────────────────
 
   pi.on("agent_end", async (_event, ctx) => {
-    if (widgetVisible) renderTodoWidget(ctx, store);
+    if (widgetVisible) renderWidget(ctx);
   });
 
   // ── Immediate widget refresh after tool execution ────────────────
 
   pi.on("tool_result", async (event, ctx) => {
     if (event.toolName === "todowrite" && widgetVisible) {
-      renderTodoWidget(ctx, store);
+      renderWidget(ctx);
     }
   });
 
@@ -196,7 +205,7 @@ export default function piTodowrite(pi: ExtensionAPI): void {
   pi.registerCommand("todowrite", {
     description: "Manage or inspect the todo list",
     getArgumentCompletions: (prefix: string) => {
-      const cmds = ["status", "show", "toggle", "reset"];
+      const cmds = ["status", "show", "toggle", "compact", "full", "reset"];
       return cmds
         .filter((c) => c.startsWith(prefix))
         .map((value) => ({ value, label: value }));
@@ -213,10 +222,24 @@ export default function piTodowrite(pi: ExtensionAPI): void {
         return;
       }
 
+      if (trimmed === "compact") {
+        compactMode = true;
+        if (widgetVisible) renderWidget(ctx);
+        ctx.ui.notify("Widget compact mode: only incomplete items shown.", "info");
+        return;
+      }
+
+      if (trimmed === "full") {
+        compactMode = false;
+        if (widgetVisible) renderWidget(ctx);
+        ctx.ui.notify("Widget full mode: all items shown.", "info");
+        return;
+      }
+
       if (trimmed === "toggle") {
         widgetVisible = !widgetVisible;
         if (widgetVisible) {
-          renderTodoWidget(ctx, store);
+          renderWidget(ctx);
           ctx.ui.notify("Todo widget visible.", "info");
         } else {
           clearTodoWidget(ctx);
