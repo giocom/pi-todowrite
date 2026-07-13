@@ -104,7 +104,7 @@ export function createTodoToolDefinition(
       "You MUST create a todo list before starting any task involving 2+ files, 3+ steps, or delegated work.",
       "Work in a CHECK → EXECUTE → UPDATE loop: check the todo, work the current item, update status immediately.",
       "Only ONE item may be in_progress at a time. Do not skip ahead.",
-      'Format content as: "[WHERE] [HOW] to [WHY] - expect [RESULT]".',
+      "Each todo content should be a short, natural phrase — not a literal [WHERE]/[HOW]/[WHY] template. Use existing todos in the list as the style reference.",
       "Each item should be completable in 1-3 tool calls. If it needs more, split it.",
       "Call todowrite after EACH item to update statuses — not just at the start.",
     ],
