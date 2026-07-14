@@ -4,26 +4,52 @@ import type { TodoStore, Todo } from "./store.js";
 
 // ─── Schema ───────────────────────────────────────────────────────────
 
+const statusSchema = Type.Union(
+  [
+    Type.Literal("pending"),
+    Type.Literal("in_progress"),
+    Type.Literal("inprogress"),
+    Type.Literal("in-progress"),
+    Type.Literal("active"),
+    Type.Literal("doing"),
+    Type.Literal("todo"),
+    Type.Literal("notstarted"),
+    Type.Literal("not-started"),
+    Type.Literal("new"),
+    Type.Literal("completed"),
+    Type.Literal("complete"),
+    Type.Literal("done"),
+    Type.Literal("finished"),
+  ],
+  {
+    description:
+      "Current status. Canonical values are 'pending', 'in_progress', 'completed'; " +
+      "common variants (todo, done, doing, active, complete, finished, ...) are accepted and normalized.",
+  },
+);
+
+const prioritySchema = Type.Union(
+  [
+    Type.Literal("high"),
+    Type.Literal("medium"),
+    Type.Literal("low"),
+    Type.Literal("normal"),
+    Type.Literal("critical"),
+    Type.Literal("urgent"),
+  ],
+  {
+    description:
+      "Priority level. Canonical values are 'high', 'medium', 'low'; " +
+      "variants (normal, critical, urgent) are accepted and normalized.",
+  },
+);
+
 const todoItemSchema = Type.Object({
   content: Type.String({
-    description: "Brief task description in format: [WHERE] [HOW] to [WHY] - expect [RESULT]",
+    description: "Brief task description of the work item.",
   }),
-  status: Type.Union(
-    [
-      Type.Literal("pending"),
-      Type.Literal("in_progress"),
-      Type.Literal("completed"),
-    ],
-    { description: "Current status of the task" },
-  ),
-  priority: Type.Union(
-    [
-      Type.Literal("high"),
-      Type.Literal("medium"),
-      Type.Literal("low"),
-    ],
-    { description: "Priority level: high, medium, or low" },
-  ),
+  status: statusSchema,
+  priority: prioritySchema,
 });
 
 const todoListSchema = Type.Object({
