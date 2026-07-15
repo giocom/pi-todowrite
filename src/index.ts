@@ -63,8 +63,9 @@ export function buildTodoPromptBlock(store: TodoStore): string {
     "4. REPEAT: the next pending item becomes in_progress.",
     "",
     "── RULES ──",
-    "- Only ONE item may be in_progress at any time.",
-    "- Do NOT skip ahead to the next item until the current one is completed.",
+      "- Only ONE item may be in_progress at any time.",
+      "- Do NOT skip ahead to the next item until the current one is completed.",
+      "- When you CREATE the todo list, you MUST immediately mark the FIRST item in_progress and begin executing it in the SAME turn. Do not create a list where every item is pending and then stop to announce — start working right away.",
     "- If a <current-todos> block exists (an ACTIVE task with incomplete items), it is the AUTHORITATIVE task list. Follow it exactly.",
     "- A <previous-todos> block means the prior task is fully COMPLETE. Do NOT treat it as the current task — for a new instruction, call todowrite to create a FRESH list.",
     "- Each item must be completable in 1-3 tool calls. If it needs more, split it.",
@@ -138,6 +139,14 @@ export default function piTodowrite(pi: ExtensionAPI): void {
   let autoResumeEnabled = true;
   let resumeDebounce = false;
 
+  // Idle-nudge: detect a stalled turn (agent ended with incomplete todos but
+  // made no tool calls — i.e. it announced "I'll do X" and stopped) and push it
+  // to continue. Soft promptGuidelines can't force a model to keep going, so we
+  // send an actual user message that triggers another turn.
+  let turnMadeToolCall = false;
+  let idleNudgeCount = 0;
+  const IDLE_NUDGE_MAX = 3;
+
   const renderWidget = (ctx: ExtensionContext) => {
     if (compactMode) {
       renderTodoWidget(ctx, store);
@@ -165,6 +174,7 @@ export default function piTodowrite(pi: ExtensionAPI): void {
   // ── System prompt injection ──────────────────────────────────────
 
   pi.on("before_agent_start", (event) => {
+    turnMadeToolCall = false;
     const todoBlock = buildTodoPromptBlock(store);
     return {
       systemPrompt: event.systemPrompt + todoBlock,
@@ -201,6 +211,7 @@ export default function piTodowrite(pi: ExtensionAPI): void {
   // ── Immediate widget refresh after tool execution ────────────────
 
   pi.on("tool_result", async (event, ctx) => {
+    turnMadeToolCall = true;
     if (event.toolName === "todowrite" && widgetVisible) {
       renderWidget(ctx);
     }
@@ -251,6 +262,23 @@ export default function piTodowrite(pi: ExtensionAPI): void {
   pi.on("agent_end", async (_event, ctx) => {
     resumeDebounce = false;
     if (widgetVisible) renderWidget(ctx);
+
+    // Idle-nudge (reliable counterpart to the soft promptGuidelines rule).
+    // If the agent ended its turn having made NO tool calls while incomplete
+    // todos remain, it stalled after announcing. Push it to continue.
+    if (!autoResumeEnabled) return;
+    if (store.getIncomplete().length === 0) return;
+    if (turnMadeToolCall) {
+      idleNudgeCount = 0; // real progress was made; reset the stall cap
+      return;
+    }
+    if (idleNudgeCount >= IDLE_NUDGE_MAX) return; // give up to avoid a nudge loop
+    if (!ctx.isIdle()) return;
+
+    idleNudgeCount++;
+    pi.sendUserMessage(
+      "Continue with the current task. Proceed to the next incomplete todo item and execute its work — make the actual tool calls now. Do not stop to announce or ask for confirmation.",
+    );
   });
 
   // ── Session shutdown ──────────────────────────────────────────────
@@ -319,10 +347,10 @@ export default function piTodowrite(pi: ExtensionAPI): void {
       if (trimmed === "autoresume" || trimmed === "autoresume on" || trimmed === "autoresume off") {
         if (trimmed.endsWith("off")) {
           autoResumeEnabled = false;
-          ctx.ui.notify("Auto-resume after compaction: OFF.", "info");
+          ctx.ui.notify("Auto-resume (compaction + idle stall): OFF.", "info");
         } else if (trimmed.endsWith("on")) {
           autoResumeEnabled = true;
-          ctx.ui.notify("Auto-resume after compaction: ON.", "info");
+          ctx.ui.notify("Auto-resume (compaction + idle stall): ON.", "info");
         } else {
           ctx.ui.notify(`Auto-resume: ${autoResumeEnabled ? "ON" : "OFF"}. Use /todowrite autoresume on|off.`, "info");
         }

@@ -133,6 +133,7 @@ export function createTodoToolDefinition(
       "Each todo content should be a short, natural phrase — not a literal [WHERE]/[HOW]/[WHY] template. Use existing todos in the list as the style reference.",
       "Each item should be completable in 1-3 tool calls. If it needs more, split it.",
       "Call todowrite after EACH item to update statuses — not just at the start.",
+      "When you CREATE the todo list, you MUST immediately mark the FIRST item in_progress and begin executing it in the same turn. Never create a list where every item is pending and then stop to announce — start working right away.",
       "After creating or updating the todo list, immediately EXECUTE the work for the current in_progress item — make the actual tool calls (edits, reads, commands). Do NOT end your turn after merely marking an item in_progress or announcing it. Never ask 'Would you like to proceed?'; if any incomplete items remain, continue straight into the next one. Only pause to ask the user when genuinely blocked or an action would have external/irreversible side effects (e.g. pushing, publishing, sending). When no incomplete items remain, the task is complete — report the result.",
     ],
     parameters: todoListSchema,
