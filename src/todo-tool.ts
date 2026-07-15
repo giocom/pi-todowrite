@@ -133,7 +133,7 @@ export function createTodoToolDefinition(
       "Each todo content should be a short, natural phrase — not a literal [WHERE]/[HOW]/[WHY] template. Use existing todos in the list as the style reference.",
       "Each item should be completable in 1-3 tool calls. If it needs more, split it.",
       "Call todowrite after EACH item to update statuses — not just at the start.",
-      "After completing an item, check whether any incomplete items remain. If incomplete items remain, mark the current item completed and immediately start the next one — do NOT ask 'Would you like to proceed?' or wait for confirmation. Only pause to ask the user when you are genuinely blocked or an action would have external/irreversible side effects (e.g. pushing, publishing, sending). When no incomplete items remain, the task is complete — report the result.",
+      "After creating or updating the todo list, immediately EXECUTE the work for the current in_progress item — make the actual tool calls (edits, reads, commands). Do NOT end your turn after merely marking an item in_progress or announcing it. Never ask 'Would you like to proceed?'; if any incomplete items remain, continue straight into the next one. Only pause to ask the user when genuinely blocked or an action would have external/irreversible side effects (e.g. pushing, publishing, sending). When no incomplete items remain, the task is complete — report the result.",
     ],
     parameters: todoListSchema,
     execute: async (_toolCallId, params, _signal, _onUpdate, _ctx) => {
