@@ -42,7 +42,7 @@ function extractTodos(data: unknown): Todo[] | null {
   return valid.length > 0 ? valid : null;
 }
 
-function buildTodoPromptBlock(store: TodoStore): string {
+export function buildTodoPromptBlock(store: TodoStore): string {
   const rules = [
     "<todo-management>",
     "You MUST use the todowrite tool to maintain a structured todo list during multi-step work.",
@@ -65,7 +65,8 @@ function buildTodoPromptBlock(store: TodoStore): string {
     "── RULES ──",
     "- Only ONE item may be in_progress at any time.",
     "- Do NOT skip ahead to the next item until the current one is completed.",
-    "- If <current-todos> exists, it is the AUTHORITATIVE task list. Follow it exactly.",
+    "- If a <current-todos> block exists (an ACTIVE task with incomplete items), it is the AUTHORITATIVE task list. Follow it exactly.",
+    "- A <previous-todos> block means the prior task is fully COMPLETE. Do NOT treat it as the current task — for a new instruction, call todowrite to create a FRESH list.",
     "- Each item must be completable in 1-3 tool calls. If it needs more, split it.",
     "- Follow the existing format convention from <current-todos> if present.",
     "- After every tool call, check whether the current todo item is done.",
@@ -75,22 +76,38 @@ function buildTodoPromptBlock(store: TodoStore): string {
   const lines = [...rules];
 
   if (store.hasTodos()) {
-    lines.push("", "<current-todos>");
-    const todos = store.getAll();
-    for (const t of todos) {
-      const mark =
-        t.status === "in_progress" ? "in_progress" :
-        t.status === "completed"   ? "completed"   :
-                                      "pending";
-      lines.push(`- [${mark}] ${t.content} (${t.priority})`);
-    }
-    const next = store.getFirstIncomplete();
-    if (next) {
-      lines.push("", `Continue with the next incomplete task: "${next.content}"`);
+    const incomplete = store.getIncomplete();
+    if (incomplete.length > 0) {
+      // Active task in progress — present as the authoritative current list.
+      lines.push("", "<current-todos>");
+      const todos = store.getAll();
+      for (const t of todos) {
+        const mark =
+          t.status === "in_progress" ? "in_progress" :
+          t.status === "completed"   ? "completed"   :
+                                        "pending";
+        lines.push(`- [${mark}] ${t.content} (${t.priority})`);
+      }
+      const next = store.getFirstIncomplete();
+      if (next) {
+        lines.push("", `Continue with the next incomplete task: "${next.content}"`);
+      }
+      lines.push("</current-todos>");
     } else {
-      lines.push("", "All tasks are completed.");
+      // Prior task fully completed — surface as history, NOT as the active list,
+      // so a new instruction isn't mistaken for "nothing left to do".
+      lines.push("", '<previous-todos status="completed">');
+      const todos = store.getAll();
+      for (const t of todos) {
+        lines.push(`- [completed] ${t.content} (${t.priority})`);
+      }
+      lines.push(
+        "",
+        "The above task is COMPLETE. For a new instruction, call todowrite to " +
+          "create a FRESH todo list — do not treat the above as the current task.",
+      );
+      lines.push("</previous-todos>");
     }
-    lines.push("</current-todos>");
   }
 
   return "\n\n" + lines.join("\n");
