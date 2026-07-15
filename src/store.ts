@@ -15,7 +15,7 @@ export type TodoStatus = "pending" | "in_progress" | "completed";
 export type TodoPriority = "high" | "medium" | "low";
 
 export interface Todo {
-  /** Brief description in format: [WHERE] [HOW] to [WHY] - expect [RESULT] */
+  /** Brief, natural description of the work item. */
   content: string;
   /** Current status of the task. */
   status: TodoStatus;

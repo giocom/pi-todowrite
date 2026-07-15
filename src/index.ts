@@ -191,6 +191,12 @@ export default function piTodowrite(pi: ExtensionAPI): void {
 
   // ── Auto-resume after compaction ─────────────────────────────────
 
+  // After compaction the agent is stopped. Pi may not be idle at the very
+  // first tick, so we poll briefly instead of a single fire-and-forget
+  // check — otherwise the resume message could be silently skipped.
+  const RESUME_MAX_ATTEMPTS = 15;
+  const RESUME_RETRY_MS = 200;
+
   pi.on("session_compact", async (event, ctx) => {
     if (!autoResumeEnabled) return;
     if (event.reason === "manual") return;
@@ -200,11 +206,29 @@ export default function piTodowrite(pi: ExtensionAPI): void {
     resumeDebounce = true;
 
     const piSendUserMessage = pi.sendUserMessage.bind(pi);
-    setTimeout(() => {
-      if (ctx.isIdle()) {
-        piSendUserMessage("Continue with the current task.");
+
+    const trySend = (): boolean => {
+      if (!ctx.isIdle()) return false;
+      resumeDebounce = false;
+      piSendUserMessage("Continue with the current task.");
+      return true;
+    };
+
+    // Common case: already idle — send immediately, no polling delay.
+    if (trySend()) return;
+
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts++;
+      if (trySend()) {
+        clearInterval(interval);
+      } else if (attempts >= RESUME_MAX_ATTEMPTS) {
+        // Gave up waiting for idle; release the debounce so a future
+        // compaction can still attempt a resume.
+        clearInterval(interval);
+        resumeDebounce = false;
       }
-    }, 0);
+    }, RESUME_RETRY_MS);
   });
 
   pi.on("agent_end", async (_event, ctx) => {

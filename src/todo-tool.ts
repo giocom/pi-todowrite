@@ -4,7 +4,7 @@ import type { TodoStore, Todo } from "./store.js";
 
 // ─── Schema ───────────────────────────────────────────────────────────
 
-const statusSchema = Type.Union(
+export const statusSchema = Type.Union(
   [
     Type.Literal("pending"),
     Type.Literal("in_progress"),
@@ -28,7 +28,7 @@ const statusSchema = Type.Union(
   },
 );
 
-const prioritySchema = Type.Union(
+export const prioritySchema = Type.Union(
   [
     Type.Literal("high"),
     Type.Literal("medium"),
@@ -52,7 +52,7 @@ const todoItemSchema = Type.Object({
   priority: prioritySchema,
 });
 
-const todoListSchema = Type.Object({
+export const todoListSchema = Type.Object({
   todos: Type.Array(todoItemSchema, {
     description:
       "The full todo list. Each call replaces the entire list (full-replacement model).",
@@ -64,7 +64,7 @@ export type TodoListInput = Static<typeof todoListSchema>;
 type AnyStatus = string;
 type AnyPriority = string;
 
-const STATUS_MAP: Record<string, Todo["status"]> = {
+export const STATUS_MAP: Record<string, Todo["status"]> = {
   pending: "pending",
   in_progress: "in_progress",
   inprogress: "in_progress",
@@ -81,7 +81,7 @@ const STATUS_MAP: Record<string, Todo["status"]> = {
   finished: "completed",
 };
 
-const PRIORITY_MAP: Record<string, Todo["priority"]> = {
+export const PRIORITY_MAP: Record<string, Todo["priority"]> = {
   high: "high",
   medium: "medium",
   low: "low",
@@ -100,7 +100,7 @@ function normalizePriority(raw: AnyPriority): Todo["priority"] | undefined {
   return PRIORITY_MAP[lower];
 }
 
-function normalizeTodo(item: { content?: unknown; status?: unknown; priority?: unknown }): Todo | null {
+export function normalizeTodo(item: { content?: unknown; status?: unknown; priority?: unknown }): Todo | null {
   if (typeof item.content !== "string") return null;
   const status = typeof item.status === "string" ? normalizeStatus(item.status) : undefined;
   const priority = typeof item.priority === "string" ? normalizePriority(item.priority) : undefined;
