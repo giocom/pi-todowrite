@@ -71,6 +71,7 @@ export function buildTodoPromptBlock(store: TodoStore): string {
     "- Each item must be completable in 1-3 tool calls. If it needs more, split it.",
     "- Follow the existing format convention from <current-todos> if present.",
     "- After every tool call, check whether the current todo item is done.",
+    "- Language: always respond in the same language the user is writing in their messages. The todo list or tool text below may be written in another language (e.g. English technical terms) — that must NOT change your response language.",
     "</todo-management>",
   ];
 
