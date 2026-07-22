@@ -148,11 +148,26 @@ export default function piTodowrite(pi: ExtensionAPI): void {
   let idleNudgeCount = 0;
   const IDLE_NUDGE_MAX = 3;
 
+  let allCompletedTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const clearAllCompletedTimer = () => {
+    if (allCompletedTimer) {
+      clearTimeout(allCompletedTimer);
+      allCompletedTimer = null;
+    }
+  };
+
   const renderWidget = (ctx: ExtensionContext) => {
+    clearAllCompletedTimer();
     if (compactMode) {
       renderTodoWidget(ctx, store);
     } else {
       renderFullTodoWidget(ctx, store);
+    }
+    if (widgetVisible && store.hasTodos() && store.getIncomplete().length === 0) {
+      allCompletedTimer = setTimeout(() => {
+        clearTodoWidget(ctx);
+      }, 3000);
     }
   };
 
@@ -285,6 +300,7 @@ export default function piTodowrite(pi: ExtensionAPI): void {
   // ── Session shutdown ──────────────────────────────────────────────
 
   pi.on("session_shutdown", async (_event, ctx) => {
+    clearAllCompletedTimer();
     store.reset();
     clearTodoWidget(ctx);
   });
