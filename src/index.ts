@@ -1,7 +1,8 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, Skill } from "@earendil-works/pi-coding-agent";
 import { TodoStore, type Todo } from "./store.js";
 import { createTodoToolDefinition } from "./todo-tool.js";
 import { renderTodoWidget, renderFullTodoWidget, clearTodoWidget } from "./widget.js";
+import { SkillMatcher } from "./skill-matcher.js";
 
 const TODO_CUSTOM_TYPE = "pi-todowrite/todos";
 
@@ -42,7 +43,7 @@ function extractTodos(data: unknown): Todo[] | null {
   return valid.length > 0 ? valid : null;
 }
 
-export function buildTodoPromptBlock(store: TodoStore): string {
+export function buildTodoPromptBlock(store: TodoStore, skills?: Skill[]): string {
   const rules = [
     "<todo-management>",
     "You MUST use the todowrite tool to maintain a structured todo list during multi-step work.",
@@ -109,6 +110,16 @@ export function buildTodoPromptBlock(store: TodoStore): string {
           "create a FRESH todo list — do not treat the above as the current task.",
       );
       lines.push("</previous-todos>");
+    }
+  }
+
+  // ── Skill recommendations ────────────────────────────────────────────
+  if (skills && skills.length > 0) {
+    const matcher = new SkillMatcher();
+    const todos = store.getAll();
+    const matched = matcher.matchSkillsToTodos(todos, skills);
+    if (matched.length > 0) {
+      lines.push(matcher.formatSkillRecommendations(matched));
     }
   }
 
@@ -191,7 +202,8 @@ export default function piTodowrite(pi: ExtensionAPI): void {
 
   pi.on("before_agent_start", (event) => {
     turnMadeToolCall = false;
-    const todoBlock = buildTodoPromptBlock(store);
+    const skills = event.systemPromptOptions?.skills;
+    const todoBlock = buildTodoPromptBlock(store, skills);
     return {
       systemPrompt: event.systemPrompt + todoBlock,
     };
