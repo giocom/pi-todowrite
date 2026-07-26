@@ -18,6 +18,8 @@
   할 일이 남아 있으면, 1회성 사용자 메시지를 보내 에이전트가 하던 작업을 이어가도록
   함 — 수동 "계속" 입력 불필요
 - 할 일 목록을 세션 파일에 저장하여 압축과 세션 재개 시 유지
+- **스킬 추천**: 로드된 스킬을 미완료 할 일 항목과 자동으로 매칭하여, 각 에이전트
+  턴 전에 관련 스킬을 시스템 프롬프트에 표시
 
 ## 설치
 
@@ -67,6 +69,44 @@ Pi 내장 압축은 컨텍스트 윈도우가 가득 차면 실행됩니다. 압
 - **디바운스** — 에이전트 턴당 1회만 재개하여 압축-재개 루프 방지
 
 `/todowrite autoresume on|off`로 전환 가능. 기본값은 켜짐.
+
+## 스킬 추천
+
+Pi에 스킬이 로드되어 있을 때 (`~/.agents/skills/`, `.pi/skills/`, 또는 pi 패키지),
+이 확장 프로그램이 미완료 할 일 항목과 스킬 이름/설명을 키워드 기반으로 매칭합니다.
+매칭 결과는 `<skill-recommendations>` XML 블록으로 시스템 프롬프트에
+`<todo-management>` 블록과 함께 주입됩니다.
+
+### 동작 방식
+
+- 각 `before_agent_start` 이벤트에서 `event.systemPromptOptions.skills`를 통해
+  로드된 스킬 목록을 읽음
+- 경량 토크나이저가 스킬 메타데이터와 할 일 내용에서 의미 있는 키워드를 추출
+- Jaccard 유사도(교집합 / 최대 크기) 기반으로 스킬 순위 산정
+- 에이전트 턴당 최대 5개 추천 주입
+- 완료된 할 일 항목은 매칭에서 제외
+- 로드된 스킬이 없거나 매칭되는 항목이 없으면 블록을 자동 생략 (완전 하위 호환)
+
+### 예시
+
+```
+<skill-recommendations>
+Available skills relevant to current tasks (2 found):
+
+- Todo "Add form validation" → try skill `react-hook-form`: Guides React Hook Form usage with useForm and validation rules
+- Todo "Build form UI" → try skill `shadcn-ui`: Expert guidance for integrating shadcn/ui components
+
+Before starting each todo item, consider whether the suggested skill
+applies. If so, load it via the skill tool and follow its instructions
+during implementation.
+</skill-recommendations>
+```
+
+### 설정 불필요
+
+스킬 추천은 자동으로 동작합니다. 전환 명령어가 필요 없습니다.
+Pi에 스킬이 로드되어 있고 현재 할 일과 관련이 있으면 표시되고, 아니면 아무것도
+변하지 않습니다.
 
 ## 라이선스
 
