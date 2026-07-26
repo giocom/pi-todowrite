@@ -69,6 +69,56 @@ describe("buildTodoPromptBlock", () => {
     expect(hasBlockTag(block, '<previous-todos status="completed">')).toBe(false);
   });
 
+  // ── <available-skills> (shown before todo-management) ──────────────
+
+  it("injects <available-skills> when skills exist, even with empty store", () => {
+    const store = new TodoStore();
+    const skills: Skill[] = [
+      makeSkill({ name: "react-hook-form", description: "Form skill" }),
+    ];
+
+    const block = buildTodoPromptBlock(store, skills);
+
+    expect(hasBlockTag(block, "<available-skills>")).toBe(true);
+    // Must appear before <todo-management>
+    expect(block.indexOf("<available-skills>")).toBeLessThan(block.indexOf("<todo-management>"));
+    expect(block).toContain("react-hook-form");
+    expect(block).toContain("Form skill");
+  });
+
+  it("omits <available-skills> when skills is undefined", () => {
+    const store = new TodoStore();
+    const block = buildTodoPromptBlock(store);
+    expect(hasBlockTag(block, "<available-skills>")).toBe(false);
+  });
+
+  it("omits <available-skills> when skills array is empty", () => {
+    const store = new TodoStore();
+    const block = buildTodoPromptBlock(store, []);
+    expect(hasBlockTag(block, "<available-skills>")).toBe(false);
+  });
+
+  it("injects <available-skills> before <todo-management> even when todos exist", () => {
+    const store = new TodoStore();
+    seed(store, [
+      { content: "Read docs", status: "in_progress", priority: "high" },
+    ]);
+
+    const skills: Skill[] = [
+      makeSkill({ name: "react-hook-form", description: "Form skill" }),
+    ];
+
+    const block = buildTodoPromptBlock(store, skills);
+
+    expect(hasBlockTag(block, "<available-skills>")).toBe(true);
+    // available-skills comes before todo-management
+    expect(block.indexOf("<available-skills>")).toBeLessThan(block.indexOf("<todo-management>"));
+    // both blocks present
+    expect(hasBlockTag(block, "<current-todos>")).toBe(true);
+  });
+
+  // ── <skill-recommendations> (per-todo matching) ────────────────────
+
   it("injects <skill-recommendations> when skills match todos", () => {
     const store = new TodoStore();
     seed(store, [

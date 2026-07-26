@@ -44,6 +44,20 @@ function extractTodos(data: unknown): Todo[] | null {
 }
 
 export function buildTodoPromptBlock(store: TodoStore, skills?: Skill[]): string {
+  // ── Available skills (shown BEFORE todo-management so the agent sees
+  //    them when creating the todo list, not after) ───────────────────
+  const preamble: string[] = [];
+
+  if (skills && skills.length > 0) {
+    preamble.push("<available-skills>");
+    preamble.push("The following skills are loaded and available. Review them before creating the todo list — when a skill is relevant to a work item, consider using it during implementation.");
+    preamble.push("");
+    for (const s of skills) {
+      preamble.push(`- ${s.name}: ${s.description}`);
+    }
+    preamble.push("</available-skills>");
+  }
+
   const rules = [
     "<todo-management>",
     "You MUST use the todowrite tool to maintain a structured todo list during multi-step work.",
@@ -55,6 +69,11 @@ export function buildTodoPromptBlock(store: TodoStore, skills?: Skill[]): string
     "- Any delegated/cross-cutting work",
     "",
     "Skip todos for: single-file typo fixes, simple lookups, pure questions/explanations.",
+    "",
+    "── BEFORE CREATING TODOS ──",
+    "Review the <available-skills> block above. If any loaded skill is relevant",
+    "to a work item, reference it in the todo description so the implementation",
+    "can use that skill's guidance.",
     "",
     "── WORKFLOW ──",
     "For EACH step of your work, follow this loop:",
@@ -76,7 +95,7 @@ export function buildTodoPromptBlock(store: TodoStore, skills?: Skill[]): string
     "</todo-management>",
   ];
 
-  const lines = [...rules];
+  const lines = [...preamble, ...rules];
 
   if (store.hasTodos()) {
     const incomplete = store.getIncomplete();
@@ -113,7 +132,7 @@ export function buildTodoPromptBlock(store: TodoStore, skills?: Skill[]): string
     }
   }
 
-  // ── Skill recommendations ────────────────────────────────────────────
+  // ── Skill recommendations (per-todo matching during execution) ─────
   if (skills && skills.length > 0) {
     const matcher = new SkillMatcher();
     const todos = store.getAll();
