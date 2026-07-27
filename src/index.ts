@@ -272,7 +272,7 @@ export default function piTodowrite(pi: ExtensionAPI): void {
   // After compaction the agent is stopped. Pi may not be idle at the very
   // first tick, so we poll briefly instead of a single fire-and-forget
   // check — otherwise the resume message could be silently skipped.
-  const RESUME_MAX_ATTEMPTS = 50;
+  const RESUME_MAX_ATTEMPTS = 150; // 150 × 200ms = 30s max wait for idle
   const RESUME_RETRY_MS = 200;
 
   pi.on("session_compact", async (event, ctx) => {
