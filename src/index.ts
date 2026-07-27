@@ -169,6 +169,9 @@ export default function piTodowrite(pi: ExtensionAPI): void {
   let compactMode = true;
   let autoResumeEnabled = true;
   let resumeDebounce = false;
+  let lastCompactResumeAt = 0;
+  const COMPACT_RESUME_COOLDOWN_MS = 30_000;
+  let compactionPollInterval: ReturnType<typeof setInterval> | null = null;
 
   // Idle-nudge: detect a stalled turn (agent ended with incomplete todos but
   // made no tool calls — i.e. it announced "I'll do X" and stopped) and push it
@@ -269,7 +272,7 @@ export default function piTodowrite(pi: ExtensionAPI): void {
   // After compaction the agent is stopped. Pi may not be idle at the very
   // first tick, so we poll briefly instead of a single fire-and-forget
   // check — otherwise the resume message could be silently skipped.
-  const RESUME_MAX_ATTEMPTS = 15;
+  const RESUME_MAX_ATTEMPTS = 50;
   const RESUME_RETRY_MS = 200;
 
   pi.on("session_compact", async (event, ctx) => {
@@ -277,6 +280,12 @@ export default function piTodowrite(pi: ExtensionAPI): void {
     if (event.reason === "manual") return;
     if (event.willRetry) return;
     if (!store.hasTodos() || store.getIncomplete().length === 0) return;
+
+    // Cooldown guard: prevent compaction → resume → compaction → resume loop
+    const now = Date.now();
+    if (now - lastCompactResumeAt < COMPACT_RESUME_COOLDOWN_MS) return;
+    lastCompactResumeAt = now;
+
     if (resumeDebounce) return;
     resumeDebounce = true;
 
@@ -293,15 +302,31 @@ export default function piTodowrite(pi: ExtensionAPI): void {
     if (trySend()) return;
 
     let attempts = 0;
-    const interval = setInterval(() => {
+
+    if (compactionPollInterval) clearInterval(compactionPollInterval);
+    compactionPollInterval = setInterval(() => {
       attempts++;
       if (trySend()) {
-        clearInterval(interval);
+        if (compactionPollInterval) {
+          clearInterval(compactionPollInterval);
+          compactionPollInterval = null;
+        }
       } else if (attempts >= RESUME_MAX_ATTEMPTS) {
         // Gave up waiting for idle; release the debounce so a future
         // compaction can still attempt a resume.
-        clearInterval(interval);
+        if (compactionPollInterval) {
+          clearInterval(compactionPollInterval);
+          compactionPollInterval = null;
+        }
         resumeDebounce = false;
+
+        // Deferred fallback: if Pi takes unusually long to settle, try once
+        // more after 10 seconds instead of giving up silently.
+        setTimeout(() => {
+          if (!ctx.isIdle()) return;
+          if (!store.hasTodos() || store.getIncomplete().length === 0) return;
+          piSendUserMessage("Continue with the current task.");
+        }, 10_000);
       }
     }, RESUME_RETRY_MS);
   });
@@ -332,6 +357,10 @@ export default function piTodowrite(pi: ExtensionAPI): void {
 
   pi.on("session_shutdown", async (_event, ctx) => {
     clearAllCompletedTimer();
+    if (compactionPollInterval) {
+      clearInterval(compactionPollInterval);
+      compactionPollInterval = null;
+    }
     store.reset();
     clearTodoWidget(ctx);
   });
