@@ -3,6 +3,7 @@ import { TodoStore, type Todo } from "./store.js";
 import { createTodoToolDefinition } from "./todo-tool.js";
 import { renderTodoWidget, renderFullTodoWidget, clearTodoWidget } from "./widget.js";
 import { SkillMatcher } from "./skill-matcher.js";
+import { filterDisabledSkills } from "./skills-toggle.js";
 
 const TODO_CUSTOM_TYPE = "pi-todowrite/todos";
 
@@ -224,7 +225,12 @@ export default function piTodowrite(pi: ExtensionAPI): void {
 
   pi.on("before_agent_start", (event) => {
     turnMadeToolCall = false;
-    const skills = event.systemPromptOptions?.skills;
+    // Honor pi-skills-toggle's on-disk state (no-op when not installed) so
+    // disabled skills don't leak into the <available-skills> block we inject.
+    const skills = filterDisabledSkills(
+      event.systemPromptOptions?.skills,
+      event.systemPromptOptions?.cwd ?? process.cwd(),
+    );
     const todoBlock = buildTodoPromptBlock(store, skills);
     return {
       systemPrompt: event.systemPrompt + todoBlock,
